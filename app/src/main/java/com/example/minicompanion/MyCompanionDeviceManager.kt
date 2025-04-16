@@ -7,10 +7,7 @@ import android.companion.CompanionDeviceManager
 import android.content.IntentSender
 import android.os.Build
 import android.os.ParcelUuid
-import androidx.annotation.RequiresApi
-import java.util.UUID
 import java.util.concurrent.Executor
-import java.util.regex.Pattern
 
 object MyCompanionDeviceManager {
 
@@ -28,39 +25,54 @@ object MyCompanionDeviceManager {
     .setSingleDevice(true)
     .build()
 
-  fun associate(deviceManager: CompanionDeviceManager) {
-    val executor: Executor =  Executor { it.run() }
+  fun associate(
+    deviceManager: CompanionDeviceManager,
+    onAssociationRequested: (intentSender: IntentSender) -> Unit
+  ) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      deviceManager.associate(
-        pairingRequest,
-        executor,
-        object : CompanionDeviceManager.Callback() {
-          override fun onAssociationPending(intentSender: IntentSender) {
-
-          }
-
-          override fun onAssociationCreated(associationInfo: AssociationInfo) {
-            // An association is created.
-          }
-
-          override fun onFailure(error: CharSequence?) {
-
-          }
-        }
-      )
+      deviceManager.associateNew(onAssociationRequested = { onAssociationRequested(it)} )
     } else {
-      deviceManager.associate(
-        pairingRequest,
-        object : CompanionDeviceManager.Callback() {
-          override fun onDeviceFound(intentSender: IntentSender) {
-            super.onDeviceFound(intentSender)
-          }
-          override fun onFailure(error: CharSequence?) {
-
-          }
-        },
-        null
-      )
+      deviceManager.associateOld()
     }
+  }
+
+  private fun CompanionDeviceManager.associateNew(
+    onAssociationRequested: (intentSender: IntentSender) -> Unit
+  ) {
+    val executor = Executor { it.run() }
+    associate(
+      pairingRequest,
+      executor,
+      object : CompanionDeviceManager.Callback() {
+        override fun onAssociationPending(intentSender: IntentSender) {
+          println("COMPANION_TEST_LOG: Association pending... intent: $intentSender")
+          onAssociationRequested(intentSender)
+        }
+
+        override fun onAssociationCreated(associationInfo: AssociationInfo) {
+          println("COMPANION_TEST_LOG: Association created! associationInfo: $associationInfo")
+        }
+
+        override fun onFailure(error: CharSequence?) {
+          println("COMPANION_TEST_LOG: Association error! error: $error")
+        }
+      }
+    )
+  }
+
+  private fun CompanionDeviceManager.associateOld() {
+    associate(
+      pairingRequest,
+      object : CompanionDeviceManager.Callback() {
+        override fun onDeviceFound(intentSender: IntentSender) {
+          println("COMPANION_TEST_LOG: Device found: $intentSender")
+          super.onDeviceFound(intentSender)
+        }
+        override fun onFailure(error: CharSequence?) {
+          println("COMPANION_TEST_LOG: Association error! error: $error")
+        }
+      },
+      null
+    )
   }
 }

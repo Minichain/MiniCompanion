@@ -3,20 +3,18 @@ package com.example.minicompanion
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.companion.AssociationInfo
-import android.companion.AssociationRequest
-import android.companion.BluetoothDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.Intent
-import android.content.IntentSender
 import android.os.IBinder
-import android.os.ParcelUuid
-import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
-import java.util.UUID
-import java.util.concurrent.Executor
-import java.util.regex.Pattern
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 
 class MainService : Service() {
 
@@ -26,11 +24,28 @@ class MainService : Service() {
     const val NOTIFICATION_ID = 1
   }
 
+  private val scope = CoroutineScope(Dispatchers.Main + Job())
+
   override fun onCreate() {
     super.onCreate()
     println("COMPANION_TEST_LOG: MainService created!")
     val deviceManager: CompanionDeviceManager = getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
-    MyCompanionDeviceManager.associate(deviceManager)
+    scope.launch {
+      App.dataCommunicationBridge.events
+        .filterIsInstance<RequestDeviceAssociation>()
+        .onEach {
+          MyCompanionDeviceManager.associate(
+            deviceManager = deviceManager,
+            onAssociationRequested = {
+              scope.launch {
+                println("COMPANION_TEST_LOG: emit event RequestDeviceAssociation")
+                App.dataCommunicationBridge.events.emit(NotifyUserDeviceAssociation(it))
+              }
+            }
+          )
+        }
+        .launchIn(this)
+    }
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
