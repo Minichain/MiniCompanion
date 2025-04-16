@@ -8,6 +8,7 @@ import android.content.IntentSender
 import android.os.Build
 import android.os.ParcelUuid
 import java.util.concurrent.Executor
+import java.util.regex.Pattern
 
 object MyCompanionDeviceManager {
 
@@ -45,7 +46,10 @@ object MyCompanionDeviceManager {
       executor,
       object : CompanionDeviceManager.Callback() {
         override fun onAssociationPending(intentSender: IntentSender) {
-          println("COMPANION_TEST_LOG: Association pending... intent: $intentSender")
+          println("COMPANION_TEST_LOG: Association pending...")
+          println("COMPANION_TEST_LOG: creatorUid: ${intentSender.creatorUid}")
+          println("COMPANION_TEST_LOG: creatorPackage: ${intentSender.creatorPackage}")
+          println("COMPANION_TEST_LOG: creatorUserHandle: ${intentSender.creatorUserHandle}")
           onAssociationRequested(intentSender)
         }
 

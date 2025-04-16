@@ -1,10 +1,14 @@
 package com.example.minicompanion
 
+import android.bluetooth.BluetoothDevice
+import android.companion.CompanionDeviceManager
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -62,12 +66,31 @@ class MainActivity : ComponentActivity() {
               .filterNotNull()
               .onEach {
                 println("COMPANION_TEST_LOG: startIntentSenderForResult()")
-                startIntentSenderForResult(it, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0)
+                val intentSenderRequest = IntentSenderRequest.Builder(it).build()
+                associateDeviceLauncher.launch(intentSenderRequest)
               }
               .launchIn(this)
           }
         }
       }
+    }
+  }
+
+  private val associateDeviceLauncher = registerForActivityResult(
+    ActivityResultContracts.StartIntentSenderForResult()
+  ) { result ->
+    if (result.resultCode == RESULT_OK) {
+      println("COMPANION_TEST_LOG: SELECT_DEVICE_REQUEST_CODE RESULT_OK")
+      val intent = result.data
+      val deviceToPair: BluetoothDevice? = intent?.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
+      deviceToPair?.let { device ->
+        println("COMPANION_TEST_LOG: deviceToPair: $device")
+        device.createBond()
+      } ?: run {
+        println("COMPANION_TEST_LOG: No device returned from association")
+      }
+    } else {
+      println("COMPANION_TEST_LOG: Device association cancelled or failed")
     }
   }
 
