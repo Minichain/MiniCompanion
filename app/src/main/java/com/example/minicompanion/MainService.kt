@@ -6,11 +6,13 @@ import android.app.Service
 import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -24,27 +26,67 @@ class MainService : Service() {
     const val NOTIFICATION_ID = 1
   }
 
+  private lateinit var deviceManager: CompanionDeviceManager
+  private var associatedDevice: AssociatedDevice? = null
   private val scope = CoroutineScope(Dispatchers.Main + Job())
 
   override fun onCreate() {
     super.onCreate()
     println("COMPANION_TEST_LOG: MainService created!")
-    val deviceManager: CompanionDeviceManager = getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
+    deviceManager = getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
     scope.launch {
-      App.dataCommunicationBridge.events
-        .filterIsInstance<RequestDeviceAssociation>()
-        .onEach {
-          MyCompanionDeviceManager.associate(
-            deviceManager = deviceManager,
-            onAssociationRequested = {
-              scope.launch {
-                println("COMPANION_TEST_LOG: emit event RequestDeviceAssociation")
-                App.dataCommunicationBridge.events.emit(NotifyUserDeviceAssociation(it))
-              }
+      listenToEvents()
+      listenToAssociations()
+    }
+  }
+
+  private fun CoroutineScope.listenToEvents() {
+    App.dataCommunicationBridge.events
+      .filterIsInstance<RequestDeviceAssociation>()
+      .onEach {
+        MyCompanionDeviceManager.associate(
+          deviceManager = deviceManager,
+          onAssociationRequested = {
+            scope.launch {
+              println("COMPANION_TEST_LOG: emit event RequestDeviceAssociation")
+              App.dataCommunicationBridge.events.emit(NotifyUserDeviceAssociation(it))
             }
-          )
+          },
+          onAssociationCreated = {
+            associatedDevice = AssociatedDevice(it.id, it.displayName.toString(), it.deviceMacAddress?.toString() ?: "")
+          }
+        )
+      }
+      .launchIn(this)
+
+    App.dataCommunicationBridge.events
+      .filterIsInstance<RequestDeviceDisassociation>()
+      .onEach {
+        associatedDevice?.let { device ->
+          MyCompanionDeviceManager.disassociate(deviceManager, device)
         }
-        .launchIn(this)
+      }
+      .launchIn(this)
+  }
+
+  private fun CoroutineScope.listenToAssociations() {
+    launch {
+      while (true) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          deviceManager.myAssociations.let {
+            println("COMPANION_TEST_LOG: Checking current associations: ${it.size}")
+            it.forEachIndexed { index, associationInfo ->
+              println("COMPANION_TEST_LOG: Association[$index]: $associationInfo")
+            }
+          }
+          deviceManager.myAssociations.firstOrNull()?.let {
+            App.dataCommunicationBridge.associatedDevice.emit(
+              AssociatedDevice(it.id, it.displayName.toString(), it.deviceMacAddress.toString())
+            )
+          }
+        }
+        delay(1000)
+      }
     }
   }
 
