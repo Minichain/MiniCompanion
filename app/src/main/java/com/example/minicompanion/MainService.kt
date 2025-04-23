@@ -27,7 +27,6 @@ class MainService : Service() {
   }
 
   private lateinit var deviceManager: CompanionDeviceManager
-  private var associatedDevice: AssociatedDevice? = null
   private val scope = CoroutineScope(Dispatchers.Main + Job())
 
   override fun onCreate() {
@@ -43,48 +42,62 @@ class MainService : Service() {
   private fun CoroutineScope.listenToEvents() {
     App.dataCommunicationBridge.events
       .filterIsInstance<RequestDeviceAssociation>()
-      .onEach {
-        MyCompanionDeviceManager.associate(
-          deviceManager = deviceManager,
-          onAssociationRequested = {
-            scope.launch {
-              println("COMPANION_TEST_LOG: emit event RequestDeviceAssociation")
-              App.dataCommunicationBridge.events.emit(NotifyUserDeviceAssociation(it))
-            }
-          },
-          onAssociationCreated = {
-            associatedDevice = AssociatedDevice(it.id, it.displayName.toString(), it.deviceMacAddress?.toString() ?: "")
-          }
-        )
-      }
+      .onEach { associate() }
       .launchIn(this)
 
     App.dataCommunicationBridge.events
       .filterIsInstance<RequestDeviceDisassociation>()
-      .onEach {
-        associatedDevice?.let { device ->
-          MyCompanionDeviceManager.disassociate(deviceManager, device)
-        }
-      }
+      .onEach { disassociate() }
       .launchIn(this)
   }
+
+  private fun associate() {
+    MyCompanionDeviceManager.associate(
+      deviceManager = deviceManager,
+      onAssociationRequested = {
+        scope.launch {
+          println("COMPANION_TEST_LOG: Association pending...")
+          println("COMPANION_TEST_LOG: creatorUid: ${it.creatorUid}")
+          println("COMPANION_TEST_LOG: creatorPackage: ${it.creatorPackage}")
+          println("COMPANION_TEST_LOG: creatorUserHandle: ${it.creatorUserHandle}")
+          App.dataCommunicationBridge.events.emit(NotifyUserDeviceAssociation(it))
+        }
+      },
+      onAssociationCreated = {
+
+      }
+    )
+  }
+
+  private fun disassociate() {
+    associatedDevice()?.let {
+      MyCompanionDeviceManager.disassociate(deviceManager, it)
+    }
+  }
+
+  private fun associatedDevice(): AssociatedDevice? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      deviceManager.myAssociations.firstOrNull()?.let { associationInfo ->
+        AssociatedDevice(
+          associationId = associationInfo.id,
+          displayName = associationInfo.displayName.toString(),
+          address = associationInfo.deviceMacAddress.toString()
+        )
+      }
+    } else {
+      deviceManager.associations.firstOrNull()?.let { address ->
+        AssociatedDevice(
+          associationId = null,
+          displayName = null,
+          address = address
+        )
+      }
+    }
 
   private fun CoroutineScope.listenToAssociations() {
     launch {
       while (true) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-          deviceManager.myAssociations.let {
-            println("COMPANION_TEST_LOG: Checking current associations: ${it.size}")
-            it.forEachIndexed { index, associationInfo ->
-              println("COMPANION_TEST_LOG: Association[$index]: $associationInfo")
-            }
-          }
-          deviceManager.myAssociations.firstOrNull()?.let {
-            App.dataCommunicationBridge.associatedDevice.emit(
-              AssociatedDevice(it.id, it.displayName.toString(), it.deviceMacAddress.toString())
-            )
-          }
-        }
+        App.dataCommunicationBridge.associatedDevice.emit(associatedDevice())
         delay(1000)
       }
     }

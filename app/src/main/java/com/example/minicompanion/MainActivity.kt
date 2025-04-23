@@ -57,28 +57,28 @@ class MainActivity : ComponentActivity() {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
           ) {
-            Button(
-              onClick = {
-                mainViewModel.requestDeviceAssociation()
+            if (associatedDevice == null) {
+              Button(
+                onClick = {
+                  mainViewModel.requestDeviceAssociation()
+                }
+              ) {
+                Text("Associate")
               }
-            ) {
-              Text("Associate")
-            }
-            Spacer(
-              modifier = Modifier.height(8.dp)
-            )
-            Button(
-              onClick = {
-                mainViewModel.requestDeviceDisassociation()
+            } else {
+              Button(
+                onClick = {
+                  mainViewModel.requestDeviceDisassociation()
+                }
+              ) {
+                Text("Disassociate")
               }
-            ) {
-              Text("Disassociate")
             }
             Spacer(
               modifier = Modifier.height(8.dp)
             )
             associatedDevice?.let { device ->
-              Text(text = "Name: ${device.name}")
+              Text(text = "Name: ${device.displayName}")
               Text(text = "Address: ${device.address}")
             }
           }

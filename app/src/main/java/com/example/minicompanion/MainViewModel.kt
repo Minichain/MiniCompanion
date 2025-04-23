@@ -31,10 +31,7 @@ class MainViewModel : ViewModel() {
     App.dataCommunicationBridge.events
       .filterIsInstance<NotifyUserDeviceAssociation>()
       .map { it.intent }
-      .onEach {
-        println("COMPANION_TEST_LOG: _deviceAssociationRequestedEvent.emit(${it})")
-        _deviceAssociationRequestedEvent.emit(it)
-      }
+      .onEach { _deviceAssociationRequestedEvent.emit(it) }
       .launchIn(this)
   }
 

@@ -2,10 +2,8 @@ package com.example.minicompanion
 
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
-import android.companion.BluetoothDeviceFilter
 import android.companion.BluetoothLeDeviceFilter
 import android.companion.CompanionDeviceManager
-import android.companion.DeviceFilter
 import android.content.IntentSender
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -14,16 +12,12 @@ import java.util.regex.Pattern
 
 object MyCompanionDeviceManager {
 
-  private val deviceFilter01: BluetoothLeDeviceFilter = BluetoothLeDeviceFilter.Builder()
+  private val deviceFilter: BluetoothLeDeviceFilter = BluetoothLeDeviceFilter.Builder()
     .setNamePattern(Pattern.compile(""))
     .build()
 
-  private val deviceFilter02: BluetoothDeviceFilter = BluetoothDeviceFilter.Builder()
-    .setNamePattern(Pattern.compile("")) //This works
-    .build()
-
   private val pairingRequest: AssociationRequest = AssociationRequest.Builder()
-    .addDeviceFilter(deviceFilter01)
+    .addDeviceFilter(deviceFilter)
     .setSingleDevice(true)
     .build()
 
@@ -38,7 +32,10 @@ object MyCompanionDeviceManager {
         onAssociationCreated = { onAssociationCreated(it) }
       )
     } else {
-      deviceManager.associateOld()
+      deviceManager.associateOld(
+        onAssociationRequested = { onAssociationRequested(it)},
+        onAssociationCreated = { onAssociationCreated(it) }
+      )
     }
   }
 
@@ -53,10 +50,6 @@ object MyCompanionDeviceManager {
       executor,
       object : CompanionDeviceManager.Callback() {
         override fun onAssociationPending(intentSender: IntentSender) {
-          println("COMPANION_TEST_LOG: Association pending...")
-          println("COMPANION_TEST_LOG: creatorUid: ${intentSender.creatorUid}")
-          println("COMPANION_TEST_LOG: creatorPackage: ${intentSender.creatorPackage}")
-          println("COMPANION_TEST_LOG: creatorUserHandle: ${intentSender.creatorUserHandle}")
           onAssociationRequested(intentSender)
         }
 
@@ -72,14 +65,25 @@ object MyCompanionDeviceManager {
     )
   }
 
-  private fun CompanionDeviceManager.associateOld() {
+  private fun CompanionDeviceManager.associateOld(
+    onAssociationRequested: (intentSender: IntentSender) -> Unit,
+    onAssociationCreated: (associationInfo: AssociationInfo) -> Unit
+  ) {
     associate(
       pairingRequest,
       object : CompanionDeviceManager.Callback() {
         override fun onDeviceFound(intentSender: IntentSender) {
           println("COMPANION_TEST_LOG: Device found: $intentSender")
           super.onDeviceFound(intentSender)
+          onAssociationRequested(intentSender)
         }
+
+        override fun onAssociationCreated(associationInfo: AssociationInfo) {
+          super.onAssociationCreated(associationInfo)
+          println("COMPANION_TEST_LOG: Association created! associationInfo: $associationInfo")
+          onAssociationCreated(associationInfo)
+        }
+
         override fun onFailure(error: CharSequence?) {
           println("COMPANION_TEST_LOG: Association error! error: $error")
         }
@@ -93,7 +97,7 @@ object MyCompanionDeviceManager {
     associatedDevice: AssociatedDevice
   ) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      deviceManager.disassociate(associatedDevice.associationId)
+      deviceManager.disassociate(associatedDevice.associationId!!)
     } else {
       deviceManager.disassociate(associatedDevice.address)
     }
