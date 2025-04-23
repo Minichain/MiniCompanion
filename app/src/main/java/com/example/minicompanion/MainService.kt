@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +37,7 @@ class MainService : Service() {
     scope.launch {
       listenToEvents()
       listenToAssociations()
+      runTestInBackground()
     }
   }
 
@@ -70,34 +72,15 @@ class MainService : Service() {
   }
 
   private fun disassociate() {
-    associatedDevice()?.let {
+    getAssociatedDevice()?.let {
       MyCompanionDeviceManager.disassociate(deviceManager, it)
     }
   }
 
-  private fun associatedDevice(): AssociatedDevice? =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      deviceManager.myAssociations.firstOrNull()?.let { associationInfo ->
-        AssociatedDevice(
-          associationId = associationInfo.id,
-          displayName = associationInfo.displayName.toString(),
-          address = associationInfo.deviceMacAddress.toString()
-        )
-      }
-    } else {
-      deviceManager.associations.firstOrNull()?.let { address ->
-        AssociatedDevice(
-          associationId = null,
-          displayName = null,
-          address = address
-        )
-      }
-    }
-
   private fun CoroutineScope.listenToAssociations() {
     launch {
       while (true) {
-        App.dataCommunicationBridge.associatedDevice.emit(associatedDevice())
+        App.dataCommunicationBridge.associatedDevice.emit(getAssociatedDevice())
         delay(1000)
       }
     }
@@ -126,4 +109,36 @@ class MainService : Service() {
   override fun onBind(intent: Intent?): IBinder? {
     return null
   }
+
+  private fun CoroutineScope.runTestInBackground() {
+    launch {
+      while (true) {
+        println("COMPANION_TEST_LOG: Test running in background. Timestamp: ${System.currentTimeMillis()}")
+        delay(1000)
+      }
+    }
+  }
+
+  private fun getAssociatedDevice(): AssociatedDevice? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) getAssociatedDeviceNew()
+    else getAssociatedDeviceLegacy()
+
+  @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+  private fun getAssociatedDeviceNew(): AssociatedDevice? =
+    deviceManager.myAssociations.firstOrNull()?.let { associationInfo ->
+      AssociatedDevice(
+        associationId = associationInfo.id,
+        displayName = associationInfo.displayName.toString(),
+        address = associationInfo.deviceMacAddress.toString()
+      )
+    }
+
+  private fun getAssociatedDeviceLegacy(): AssociatedDevice? =
+    deviceManager.associations.firstOrNull()?.let { address ->
+      AssociatedDevice(
+        associationId = null,
+        displayName = null,
+        address = address
+      )
+    }
 }
